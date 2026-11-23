@@ -1,5 +1,5 @@
 import { common } from '@kit.AbilityKit';
-import { promptAction } from '@kit.ArkUI';
+import { promptAction, window } from '@kit.ArkUI';
 import { pasteboard } from '@kit.BasicServicesKit';
 import {
   AddCollectionResult,
@@ -74,6 +74,7 @@ struct Index {
   @State shareNotice: string = '';
   @State shareNoticeSuccess: boolean = true;
   @State loading: boolean = true;
+  @State bottomSafeInset: number = 40;
 
   aboutToAppear(): void {
     this.initialize();
@@ -92,6 +93,7 @@ struct Index {
     }
     try {
       const context = getContext(this) as common.UIAbilityContext;
+      await this.updateBottomSafeInset(context);
       await this.repository.initialize(context);
       this.initialized = true;
       await this.refreshItems();
@@ -100,6 +102,20 @@ struct Index {
       this.loading = false;
       this.shareNoticeSuccess = false;
       this.shareNotice = `本地数据初始化失败：${String(error)}`;
+    }
+  }
+
+  private async updateBottomSafeInset(context: common.UIAbilityContext): Promise<void> {
+    try {
+      const mainWindow = await window.getLastWindow(context);
+      const systemArea = mainWindow.getWindowAvoidArea(window.AvoidAreaType.TYPE_SYSTEM);
+      const indicatorArea = mainWindow.getWindowAvoidArea(window.AvoidAreaType.TYPE_NAVIGATION_INDICATOR);
+      const systemHeight = systemArea.visible ? systemArea.bottomRect.height : 0;
+      const indicatorHeight = indicatorArea.visible ? indicatorArea.bottomRect.height : 0;
+      const bottomHeight = Math.max(systemHeight, indicatorHeight);
+      this.bottomSafeInset = Math.min(56, Math.max(40, Math.ceil(px2vp(bottomHeight)) + 10));
+    } catch (error) {
+      this.bottomSafeInset = 40;
     }
   }
 
@@ -614,6 +630,7 @@ struct Index {
       .scrollBar(BarState.Off)
     }
     .width('100%')
+    .layoutWeight(1)
   }
 
   @Builder
@@ -808,8 +825,8 @@ struct Index {
       }, (label: string) => label)
     }
     .width('100%')
-    .height(64)
-    .padding({ bottom: 5 })
+    .height(64 + this.bottomSafeInset)
+    .padding({ top: 6, bottom: this.bottomSafeInset })
     .backgroundColor('#FBFDFC')
     .border({ width: { top: 1 }, color: '#E4ECE9' })
   }

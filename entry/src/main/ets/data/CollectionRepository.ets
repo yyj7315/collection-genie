@@ -68,6 +68,14 @@ interface TitleUpdate {
   title: string;
 }
 
+interface SourceUpdate {
+  id: number;
+  source: string;
+  sourceItemId: string;
+  canonicalUrl: string;
+  tags: string;
+}
+
 export class CollectionRepository {
   private static instance: CollectionRepository | null = null;
   private store: relationalStore.RdbStore | null = null;
@@ -91,6 +99,7 @@ export class CollectionRepository {
     this.store = await relationalStore.getRdbStore(context, config);
     await this.store.executeSql(CREATE_TABLE_SQL);
     await this.normalizeStoredTitles();
+    await this.normalizeStoredSources();
     this.initialized = true;
   }
 
@@ -273,6 +282,48 @@ export class CollectionRepository {
     }
   }
 
+  private async normalizeStoredSources(): Promise<void> {
+    const resultSet = await this.requireStore().querySql(
+      'SELECT id, source, source_item_id, original_url, canonical_url, tags FROM collections'
+    );
+    const updates: SourceUpdate[] = [];
+    while (resultSet.goToNextRow()) {
+      const id = resultSet.getLong(resultSet.getColumnIndex('id'));
+      const currentSource = resultSet.getString(resultSet.getColumnIndex('source'));
+      const currentSourceItemId = resultSet.getString(resultSet.getColumnIndex('source_item_id'));
+      const originalUrl = resultSet.getString(resultSet.getColumnIndex('original_url'));
+      const currentCanonicalUrl = resultSet.getString(resultSet.getColumnIndex('canonical_url'));
+      const currentTags = resultSet.getString(resultSet.getColumnIndex('tags'));
+      const detectedSource = this.detectSource(originalUrl);
+      if (detectedSource.length === 0) {
+        continue;
+      }
+      const sourceItemId = this.extractSourceItemId(originalUrl, detectedSource);
+      const canonicalUrl = this.toCanonicalUrl(originalUrl, detectedSource, sourceItemId);
+      const tags = this.replacePlatformTag(currentTags, detectedSource);
+      if (currentSource !== detectedSource ||
+        currentSourceItemId !== sourceItemId ||
+        currentCanonicalUrl !== canonicalUrl ||
+        currentTags !== tags) {
+        updates.push({
+          id: id,
+          source: detectedSource,
+          sourceItemId: sourceItemId,
+          canonicalUrl: canonicalUrl,
+          tags: tags
+        });
+      }
+    }
+    resultSet.close();
+    for (let index = 0; index < updates.length; index++) {
+      const row = updates[index];
+      await this.requireStore().executeSql(
+        'UPDATE collections SET source = ?, source_item_id = ?, canonical_url = ?, tags = ? WHERE id = ?',
+        [row.source, row.sourceItemId, row.canonicalUrl, row.tags, row.id]
+      );
+    }
+  }
+
   private readItem(resultSet: relationalStore.ResultSet): CollectionItem {
     return {
       id: resultSet.getLong(resultSet.getColumnIndex('id')),
@@ -296,25 +347,27 @@ export class CollectionRepository {
   }
 
   private parseShare(payload: string): ParsedShare {
-    const urlMatch: RegExpMatchArray | null = payload.match(/https?:\/\/[^\s，。！？]+/);
+    const urlMatch: RegExpMatchArray | null = payload.match(/https?:\/\/[^\s，。！？]+/i);
     const originalUrl = urlMatch === null ? '' : this.trimUrl(urlMatch[0]);
+    const detectedSource = this.detectSource(originalUrl);
+    const source = detectedSource.length > 0 ? detectedSource : '其他来源';
     const titlePart = originalUrl.length > 0 ? payload.substring(0, payload.indexOf(originalUrl)) : payload;
     const cleanedTitle = this.cleanTitle(titlePart);
-    const sourceItemId = this.extractSourceItemId(originalUrl);
+    const sourceItemId = this.extractSourceItemId(originalUrl, source);
     const canonicalUrl = originalUrl.length > 0
-      ? this.toCanonicalUrl(originalUrl, sourceItemId)
+      ? this.toCanonicalUrl(originalUrl, source, sourceItemId)
       : `local-${Date.now()}`;
-    const fallbackTitle = cleanedTitle.length > 0 ? cleanedTitle : '未命名抖音收藏';
+    const fallbackTitle = cleanedTitle.length > 0 ? cleanedTitle : '未命名收藏';
     const category = this.classify(fallbackTitle);
     return {
-      source: '抖音精选',
+      source: source,
       sourceItemId: sourceItemId,
       originalUrl: originalUrl,
       canonicalUrl: canonicalUrl,
       title: fallbackTitle,
       author: this.extractAuthor(titlePart),
       category: category,
-      tags: this.buildTags(fallbackTitle, category),
+      tags: this.buildTags(fallbackTitle, category, source),
       summary: fallbackTitle.length > 92 ? `${fallbackTitle.substring(0, 92)}…` : fallbackTitle
     };
   }
@@ -330,7 +383,9 @@ export class CollectionRepository {
   private cleanTitle(value: string): string {
     let result = value.trim();
     result = result.replace(/^\d+(?:\.\d+)?\s*/, '');
+    result = result.replace(/[【\[]([^】\]]+?)[-—–]\s*哔哩哔哩[】\]]/gi, '$1');
     result = result.replace(/【抖音精选】/g, '');
+    result = result.replace(/哔哩哔哩/gi, '');
     result = result.replace(/点击链接\s*or\s*复制打开app/gi, '');
     result = result.replace(/复制此链接[，,]?\s*打开抖音[^。！!\n]*/g, '');
     result = result.replace(/看看/g, '');
@@ -346,13 +401,64 @@ export class CollectionRepository {
     return authorMatch === null ? '' : authorMatch[1];
   }
 
-  private extractSourceItemId(url: string): string {
-    const patterns: RegExp[] = [
-      /\/video\/(\d+)/,
-      /\/note\/(\d+)/,
-      /\/slides\/(\d+)/,
-      /[?&](?:modal_id|aweme_id)=(\d+)/
-    ];
+  private detectSource(url: string): string {
+    if (this.matchesDomain(url, ['douyin.com', 'iesdouyin.com'])) {
+      return '抖音精选';
+    }
+    if (this.matchesDomain(url, ['bilibili.com', 'b23.tv'])) {
+      return '哔哩哔哩';
+    }
+    if (this.matchesDomain(url, ['xiaohongshu.com', 'xhslink.com'])) {
+      return '小红书';
+    }
+    if (this.matchesDomain(url, ['kuaishou.com', 'gifshow.com'])) {
+      return '快手';
+    }
+    if (this.matchesDomain(url, ['weibo.com', 'weibo.cn'])) {
+      return '微博';
+    }
+    if (this.matchesDomain(url, ['youtube.com', 'youtu.be'])) {
+      return 'YouTube';
+    }
+    return '';
+  }
+
+  private matchesDomain(url: string, domains: string[]): boolean {
+    const hostMatch: RegExpMatchArray | null = url.match(/^https?:\/\/([^\/?#]+)/i);
+    if (hostMatch === null) {
+      return false;
+    }
+    const host = hostMatch[1].toLowerCase();
+    for (let index = 0; index < domains.length; index++) {
+      const domain = domains[index].toLowerCase();
+      if (host === domain || host.endsWith(`.${domain}`)) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  private extractSourceItemId(url: string, source: string): string {
+    let patterns: RegExp[] = [];
+    if (source === '哔哩哔哩') {
+      patterns = [
+        /\/video\/(BV[A-Za-z0-9]+)/i,
+        /\/video\/(av\d+)/i,
+        /[?&]bvid=(BV[A-Za-z0-9]+)/i
+      ];
+    } else if (source === '抖音精选') {
+      patterns = [
+        /\/video\/(\d+)/,
+        /\/note\/(\d+)/,
+        /\/slides\/(\d+)/,
+        /[?&](?:modal_id|aweme_id)=(\d+)/
+      ];
+    } else {
+      patterns = [
+        /\/video\/([A-Za-z0-9_-]+)/i,
+        /\/note\/([A-Za-z0-9_-]+)/i
+      ];
+    }
     for (let index = 0; index < patterns.length; index++) {
       const match: RegExpMatchArray | null = url.match(patterns[index]);
       if (match !== null) {
@@ -362,13 +468,12 @@ export class CollectionRepository {
     return '';
   }
 
-  private toCanonicalUrl(url: string, sourceItemId: string): string {
-    if (sourceItemId.length > 0) {
+  private toCanonicalUrl(url: string, source: string, sourceItemId: string): string {
+    if (source === '抖音精选' && sourceItemId.length > 0) {
       return `https://www.douyin.com/video/${sourceItemId}`;
     }
-    const shortMatch: RegExpMatchArray | null = url.match(/https?:\/\/v\.douyin\.com\/[A-Za-z0-9_-]+/);
-    if (shortMatch !== null) {
-      return shortMatch[0];
+    if (source === '哔哩哔哩' && sourceItemId.length > 0) {
+      return `https://www.bilibili.com/video/${sourceItemId}`;
     }
     return url.split('#')[0];
   }
@@ -398,7 +503,16 @@ export class CollectionRepository {
     return '待整理';
   }
 
-  private buildTags(title: string, category: string): string {
+  private replacePlatformTag(tags: string, source: string): string {
+    const platformTags = ['抖音精选', '哔哩哔哩', '小红书', '快手', '微博', 'YouTube', '其他来源'];
+    const parts = tags.split('|').filter((value: string) =>
+      value.length > 0 && !platformTags.includes(value)
+    );
+    parts.push(source);
+    return parts.join('|');
+  }
+
+  private buildTags(title: string, category: string, source: string): string {
     const candidates: string[] = [];
     const tagPatterns: string[] = [
       '教程', '健身', '减脂', '增肌', 'AI', '编程', '摄影', '电影', '脱口秀',
@@ -412,7 +526,7 @@ export class CollectionRepository {
     if (candidates.length === 0 && category !== '待整理') {
       candidates.push(category);
     }
-    candidates.push('抖音精选');
+    candidates.push(source);
     return candidates.join('|');
   }
 
