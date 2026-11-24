@@ -148,3 +148,10 @@
 - 默认更新清单地址改为 jsDelivr 的 `latest` 标签。
 - `latest` 清单能够自动解析到当前最新版本 `0.3.2`。
 - 真机点击“检查更新”后正确显示“当前已是最新版本 v0.3.2”。
+
+## 10. GitHub 公开仓库
+
+![GitHub Public 仓库](artifacts/github-public-repository.png)
+
+- `yyj7315/collection-genie` 已切换为 Public。
+- 未登录浏览器可直接访问源码、README、版本标签和升级产物。
