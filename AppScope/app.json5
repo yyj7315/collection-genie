@@ -2,8 +2,8 @@
   "app": {
     "bundleName": "com.yongjie.collectiongenie",
     "vendor": "yongjie",
-    "versionCode": 1000006,
-    "versionName": "0.3.0",
+    "versionCode": 1000007,
+    "versionName": "0.3.1",
     "icon": "$media:layered_image",
     "label": "$string:app_name"
   }

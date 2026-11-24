@@ -1,6 +1,6 @@
 import { common, bundleManager, Want, wantConstant } from '@kit.AbilityKit';
 import { updateManager } from '@kit.AppGalleryKit';
-import { request } from '@kit.BasicServicesKit';
+import { BusinessError, request } from '@kit.BasicServicesKit';
 import { fileIo, fileUri, hash as fileHash } from '@kit.CoreFileKit';
 import { http } from '@kit.NetworkKit';
 import { preferences } from '@kit.ArkData';
@@ -9,7 +9,7 @@ const PREFS_NAME: string = 'collection_genie_settings';
 const MANIFEST_URL_KEY: string = 'update_manifest_url';
 
 export const DEFAULT_UPDATE_MANIFEST_URL: string =
-  'https://raw.githubusercontent.com/yyj7315/collection-genie/main/update-manifest.json';
+  'https://cdn.jsdelivr.net/gh/yyj7315/collection-genie@main/update-manifest.json';
 
 export interface UpdateManifest {
   versionName: string;
@@ -102,22 +102,28 @@ export class UpdateService {
     }
     const client = http.createHttp();
     try {
-      const response = await client.request(manifestUrl, {
-        method: http.RequestMethod.GET,
-        expectDataType: http.HttpDataType.STRING,
-        connectTimeout: 12000,
-        readTimeout: 12000,
-        header: {
-          'Accept': 'application/json',
-          'Cache-Control': 'no-cache'
+      try {
+        const response = await client.request(manifestUrl, {
+          method: http.RequestMethod.GET,
+          expectDataType: http.HttpDataType.STRING,
+          connectTimeout: 10000,
+          readTimeout: 10000,
+          header: {
+            'Accept': 'application/json',
+            'Cache-Control': 'no-cache'
+          }
+        });
+        if (response.responseCode !== http.ResponseCode.OK || typeof response.result !== 'string') {
+          throw new Error(`HTTP ${response.responseCode}`);
         }
-      });
-      if (response.responseCode !== http.ResponseCode.OK || typeof response.result !== 'string') {
-        throw new Error(`更新清单请求失败：HTTP ${response.responseCode}`);
+        const manifest = JSON.parse(response.result) as UpdateManifest;
+        UpdateService.validateManifest(manifest);
+        return manifest;
+      } catch (error) {
+        const requestError = error as BusinessError;
+        const detail = requestError.message.length > 0 ? requestError.message : String(error);
+        throw new Error(`无法读取更新清单：${detail}`);
       }
-      const manifest = JSON.parse(response.result) as UpdateManifest;
-      UpdateService.validateManifest(manifest);
-      return manifest;
     } finally {
       client.destroy();
     }

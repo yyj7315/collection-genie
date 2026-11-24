@@ -4,7 +4,7 @@
 
 ![收藏夹精灵应用图标](AppScope/resources/base/media/collection_icon.png)
 
-当前版本：`0.3.0`
+当前版本：`0.3.1`
 验证状态：已在 HarmonyOS 7 真机完成核心链路测试
 
 ## 已实现功能
@@ -69,12 +69,12 @@
 
 可直接安装的调试签名包：
 
-[artifacts/collection-genie-0.3.0.hap](artifacts/collection-genie-0.3.0.hap)
+[artifacts/collection-genie-0.3.1.hap](artifacts/collection-genie-0.3.1.hap)
 
 SHA-256：
 
 ```text
-d609ff879fa286e4db07bf8fb35b9aaf915e8b90900e7902421d8065ef22f1fd
+078d0a72249d72e25adcdb6aace93259abeec7bf12c6e4e97b5921093914f3fa
 ```
 
 该 Profile 只绑定当前测试手机的 UDID，重新签名前不能保证安装到其他手机。
@@ -98,7 +98,7 @@ d609ff879fa286e4db07bf8fb35b9aaf915e8b90900e7902421d8065ef22f1fd
 3. 下载 HAP 并校验 SHA-256。
 4. 校验通过后打开系统安装/文件打开界面，由用户确认安装。
 
-仓库内的 [update-manifest.json](update-manifest.json) 是清单模板和字段示例。由于本仓库当前为私有仓库，自动检查前需要把该清单及 HAP 下载地址部署到手机可匿名访问的 HTTPS 地址，或在“我的”页面替换为实际可访问地址。
+仓库内的 [update-manifest.json](update-manifest.json) 是清单模板和字段示例。仓库已经公开，默认通过 jsDelivr 镜像读取清单和 HAP；也可以在“我的”页面替换为其他可匿名访问的 HTTPS 地址。
 
 HarmonyOS 对普通侧载应用不允许静默安装。正式上架后应优先使用 AppGallery Kit 的官方更新弹窗；未上架版本完成下载和 SHA-256 校验后，只能打开系统提供的安装或文件打开界面，再由用户确认。
 
