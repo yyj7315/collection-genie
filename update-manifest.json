@@ -1,8 +1,8 @@
 {
-  "versionName": "0.3.1",
-  "versionCode": 1000007,
-  "downloadUrl": "https://cdn.jsdelivr.net/gh/yyj7315/collection-genie@v0.3.1/artifacts/collection-genie-0.3.1.hap",
-  "sha256": "078D0A72249D72E25ADCDB6AACE93259ABEEC7BF12C6E4E97B5921093914F3FA",
-  "releaseNotes": "修复公开更新清单在中国大陆网络下的访问问题，默认改用 jsDelivr 公共镜像，并提供更清晰的错误提示。",
-  "publishedAt": "2026-11-24T11:32:00+08:00"
+  "versionName": "0.3.2",
+  "versionCode": 1000008,
+  "downloadUrl": "https://cdn.jsdelivr.net/gh/yyj7315/collection-genie@v0.3.2/artifacts/collection-genie-0.3.2.hap",
+  "sha256": "CF05538285A64679BB12560AEBCBE7C285E3A5FA96BE285231D538962901AC76",
+  "releaseNotes": "更新清单改用 jsDelivr latest 标签，后续发布新版本标签即可自动获取升级信息。",
+  "publishedAt": "2026-11-24T11:36:00+08:00"
 }

@@ -9,7 +9,7 @@ const PREFS_NAME: string = 'collection_genie_settings';
 const MANIFEST_URL_KEY: string = 'update_manifest_url';
 
 export const DEFAULT_UPDATE_MANIFEST_URL: string =
-  'https://cdn.jsdelivr.net/gh/yyj7315/collection-genie@main/update-manifest.json';
+  'https://cdn.jsdelivr.net/gh/yyj7315/collection-genie@latest/update-manifest.json';
 
 export interface UpdateManifest {
   versionName: string;
