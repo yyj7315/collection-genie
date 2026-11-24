@@ -1,0 +1,8 @@
+{
+  "versionName": "0.3.0",
+  "versionCode": 1000006,
+  "downloadUrl": "https://raw.githubusercontent.com/yyj7315/collection-genie/main/artifacts/collection-genie-0.3.0.hap",
+  "sha256": "D609FF879FA286E4DB07BF8FB35B9AAF915E8B90900E7902421D8065EF22F1FD",
+  "releaseNotes": "新增多平台来源识别、统一底部导航图标、新版动漫精灵图标、在线版本检查、升级包校验和数据库版本迁移。",
+  "publishedAt": "2026-11-24T11:15:00+08:00"
+}

@@ -6,6 +6,10 @@ import {
   CollectionItem,
   CollectionRepository
 } from '../data/CollectionRepository';
+import {
+  UpdateManifest,
+  UpdateService
+} from '../data/UpdateService';
 
 const CATEGORIES: string[] = [
   '全部',
@@ -75,6 +79,16 @@ struct Index {
   @State shareNoticeSuccess: boolean = true;
   @State loading: boolean = true;
   @State bottomSafeInset: number = 40;
+  @State currentVersion: string = '0.3.0';
+  @State updateManifestUrl: string = '';
+  @State updateBusy: boolean = false;
+  @State updateAvailable: boolean = false;
+  @State updateVersionName: string = '';
+  @State updateDownloadUrl: string = '';
+  @State updateSha256: string = '';
+  @State updateReleaseNotes: string = '';
+  @State updateStatus: string = '';
+  @State updateStatusSuccess: boolean = true;
 
   aboutToAppear(): void {
     this.initialize();
@@ -95,6 +109,8 @@ struct Index {
       const context = getContext(this) as common.UIAbilityContext;
       await this.updateBottomSafeInset(context);
       await this.repository.initialize(context);
+      this.currentVersion = UpdateService.getCurrentVersionName();
+      this.updateManifestUrl = await UpdateService.getManifestUrl(context);
       this.initialized = true;
       await this.refreshItems();
       this.consumePendingShare();
@@ -165,6 +181,95 @@ struct Index {
     await this.refreshItems();
     if (selectedId > 0) {
       this.selectedItem = await this.repository.findById(selectedId);
+    }
+  }
+
+  private async saveUpdateManifestUrl(): Promise<void> {
+    const context = getContext(this) as common.UIAbilityContext;
+    try {
+      await UpdateService.saveManifestUrl(context, this.updateManifestUrl);
+      this.updateStatusSuccess = true;
+      this.updateStatus = '更新清单地址已保存。';
+    } catch (error) {
+      this.updateStatusSuccess = false;
+      this.updateStatus = `更新地址保存失败：${String(error)}`;
+    }
+  }
+
+  private async checkForUpdates(): Promise<void> {
+    if (this.updateBusy) {
+      return;
+    }
+    this.updateBusy = true;
+    this.updateAvailable = false;
+    this.updateStatus = '正在检查新版本…';
+    this.updateStatusSuccess = true;
+    const context = getContext(this) as common.UIAbilityContext;
+    try {
+      const appGalleryResult = await UpdateService.checkAppGallery(context);
+      if (appGalleryResult.updateAvailable) {
+        this.updateStatusSuccess = true;
+        this.updateStatus = appGalleryResult.message;
+        return;
+      }
+
+      const manifest = await UpdateService.fetchManifest(this.updateManifestUrl);
+      if (!UpdateService.hasNewerVersion(manifest)) {
+        this.updateStatusSuccess = true;
+        this.updateStatus = `当前已是最新版本 v${this.currentVersion}`;
+        return;
+      }
+      this.updateAvailable = true;
+      this.updateVersionName = manifest.versionName;
+      this.updateDownloadUrl = manifest.downloadUrl;
+      this.updateSha256 = manifest.sha256;
+      this.updateReleaseNotes = manifest.releaseNotes;
+      this.updateStatusSuccess = true;
+      this.updateStatus = `发现新版本 v${manifest.versionName}`;
+    } catch (error) {
+      this.updateStatusSuccess = false;
+      this.updateStatus = `检查更新失败：${String(error)}`;
+    } finally {
+      this.updateBusy = false;
+    }
+  }
+
+  private async downloadUpdate(): Promise<void> {
+    if (this.updateBusy || !this.updateAvailable) {
+      return;
+    }
+    this.updateBusy = true;
+    this.updateStatusSuccess = true;
+    this.updateStatus = '正在下载升级包…';
+    const context = getContext(this) as common.UIAbilityContext;
+    const manifest: UpdateManifest = {
+      versionName: this.updateVersionName,
+      versionCode: 0,
+      downloadUrl: this.updateDownloadUrl,
+      sha256: this.updateSha256,
+      releaseNotes: this.updateReleaseNotes,
+      publishedAt: ''
+    };
+    try {
+      const downloaded = await UpdateService.downloadAndVerify(
+        context,
+        manifest,
+        (received: number, total: number) => {
+          if (total > 0) {
+            const percent = Math.min(99, Math.floor(received * 100 / total));
+            this.updateStatus = `正在下载升级包…${percent}%`;
+          }
+        }
+      );
+      this.updateStatus = `SHA-256 校验通过，正在打开系统安装界面…`;
+      await UpdateService.openInstallUi(context, downloaded.filePath);
+      this.updateStatusSuccess = true;
+      this.updateStatus = '升级包已校验，请在系统界面确认安装。';
+    } catch (error) {
+      this.updateStatusSuccess = false;
+      this.updateStatus = `升级失败：${String(error)}`;
+    } finally {
+      this.updateBusy = false;
     }
   }
 
@@ -378,6 +483,8 @@ struct Index {
             Text(item.source)
               .fontSize(11)
               .fontColor('#84928E')
+              .maxLines(1)
+              .textOverflow({ overflow: TextOverflow.Ellipsis })
           }
           .alignItems(HorizontalAlign.Start)
         }
@@ -507,7 +614,7 @@ struct Index {
           if (this.reviewItem() !== null) {
             this.CollectionCard(this.reviewItem() as CollectionItem, true)
           } else {
-            this.EmptyState('还没有收藏', '在抖音精选点击分享，选择收藏夹精灵即可开始收录。')
+            this.EmptyState('还没有收藏', '在支持的应用中点击分享，再选择收藏夹精灵即可开始收录。')
           }
         }
         .width('100%')
@@ -615,7 +722,7 @@ struct Index {
             this.EmptyState(
               this.items.length === 0 ? '内容库还是空的' : '没有符合条件的内容',
               this.items.length === 0
-                ? '从抖音精选分享一条视频到这里，系统会自动分类并保存。'
+                ? '从任意支持的应用分享一条内容到这里，系统会自动识别来源并分类保存。'
                 : '试试更换分类或清空搜索关键词。'
             )
           } else {
@@ -741,11 +848,116 @@ struct Index {
         .padding({ top: 14 })
 
         Column({ space: 12 }) {
+          Row() {
+            Text('版本升级')
+              .fontSize(18)
+              .fontWeight(FontWeight.Bold)
+              .fontColor('#173B34')
+            Blank()
+            Text(`v${this.currentVersion}`)
+              .fontSize(12)
+              .fontColor('#0B8268')
+              .padding({ left: 10, right: 10, top: 5, bottom: 5 })
+              .backgroundColor('#E1F5ED')
+              .borderRadius(12)
+          }
+          .width('100%')
+
+          Text('更新清单地址')
+            .fontSize(13)
+            .fontColor('#60746E')
+          TextInput({
+            placeholder: 'https://example.com/update-manifest.json',
+            text: this.updateManifestUrl
+          })
+            .height(42)
+            .fontSize(12)
+            .backgroundColor('#F2F6F4')
+            .borderRadius(11)
+            .onChange((value: string) => {
+              this.updateManifestUrl = value;
+            })
+
+          Row({ space: 10 }) {
+            Button('保存地址')
+              .layoutWeight(1)
+              .height(42)
+              .fontSize(13)
+              .backgroundColor('#E5F1ED')
+              .fontColor('#126B59')
+              .onClick(() => {
+                this.saveUpdateManifestUrl();
+              })
+            Button(this.updateBusy ? '检查中…' : '检查更新')
+              .layoutWeight(1)
+              .height(42)
+              .fontSize(13)
+              .backgroundColor('#168F77')
+              .fontColor('#FFFFFF')
+              .enabled(!this.updateBusy)
+              .opacity(this.updateBusy ? 0.6 : 1)
+              .onClick(() => {
+                this.checkForUpdates();
+              })
+          }
+          .width('100%')
+
+          if (this.updateAvailable) {
+            Column({ space: 7 }) {
+              Text(`发现新版本 v${this.updateVersionName}`)
+                .fontSize(14)
+                .fontWeight(FontWeight.Medium)
+                .fontColor('#173B34')
+              Text(this.updateReleaseNotes.length > 0 ? this.updateReleaseNotes : '本次更新包含功能优化与问题修复。')
+                .fontSize(13)
+                .lineHeight(20)
+                .fontColor('#5F706B')
+              Button(this.updateBusy ? '下载校验中…' : '下载、校验并安装')
+                .width('100%')
+                .height(42)
+                .fontSize(13)
+                .backgroundColor('#0C8169')
+                .fontColor('#FFFFFF')
+                .enabled(!this.updateBusy)
+                .onClick(() => {
+                  this.downloadUpdate();
+                })
+            }
+            .width('100%')
+            .alignItems(HorizontalAlign.Start)
+            .padding(12)
+            .backgroundColor('#EFF8F4')
+            .borderRadius(12)
+          }
+
+          if (this.updateStatus.length > 0) {
+            Text(this.updateStatus)
+              .fontSize(12)
+              .lineHeight(18)
+              .fontColor(this.updateStatusSuccess ? '#126B59' : '#9C4035')
+              .width('100%')
+              .padding(10)
+              .backgroundColor(this.updateStatusSuccess ? '#E7F7F1' : '#FFF0ED')
+              .borderRadius(10)
+          }
+
+          Text('安装包必须来自 HTTPS 地址并通过 SHA-256 校验；最终安装仍需用户在系统界面确认。')
+            .fontSize(11)
+            .lineHeight(17)
+            .fontColor('#7A8B86')
+        }
+        .width('100%')
+        .alignItems(HorizontalAlign.Start)
+        .padding(17)
+        .backgroundColor('#FFFFFF')
+        .borderRadius(18)
+
+        Column({ space: 12 }) {
           Text('如何收录')
             .fontSize(18)
             .fontWeight(FontWeight.Bold)
             .fontColor('#173B34')
-          Text('1. 在抖音精选视频页点击「分享」。')
+          Text('1. 在抖音精选、哔哩哔哩、小红书等应用的内容页点击「分享」。')
             .fontSize(14)
             .fontColor('#4B615B')
           Text('2. 在「系统分享」中向左滑动，选择「收藏夹精灵」。')
@@ -766,7 +978,7 @@ struct Index {
             .fontSize(18)
             .fontWeight(FontWeight.Bold)
             .fontColor('#173B34')
-          Text('本版本只保存你主动分享的链接、标题和本地整理数据，不读取抖音账号或抖音私有收藏。数据仅保存在本机。')
+          Text('本版本只保存你主动分享的链接、标题和本地整理数据，不读取平台账号或平台私有收藏。数据仅保存在本机。')
             .fontSize(14)
             .lineHeight(22)
             .fontColor('#4B615B')
@@ -810,14 +1022,24 @@ struct Index {
   private BottomNavigation() {
     Row() {
       ForEach(['首页', '内容库', '统计', '我的'], (label: string, index: number) => {
-        Column({ space: 4 }) {
-          Text(['⌂', '▤', '▥', '◎'][index])
-            .fontSize(22)
-            .fontColor(this.activeTab === index ? '#0C8169' : '#8B9B96')
+        Column({ space: 5 }) {
+          Image(
+            index === 0 ? $r('app.media.nav_home') :
+            index === 1 ? $r('app.media.nav_library') :
+            index === 2 ? $r('app.media.nav_stats') :
+            $r('app.media.nav_profile')
+          )
+            .width(24)
+            .height(24)
+            .objectFit(ImageFit.Contain)
+            .fillColor(this.activeTab === index ? '#0C8169' : '#80918C')
           Text(label)
             .fontSize(11)
+            .lineHeight(16)
             .fontColor(this.activeTab === index ? '#0C8169' : '#8B9B96')
         }
+        .height(50)
+        .justifyContent(FlexAlign.Center)
         .layoutWeight(1)
         .onClick(() => {
           this.activeTab = index;
@@ -852,6 +1074,8 @@ struct Index {
           Text(item.source)
             .fontSize(12)
             .fontColor('#758681')
+            .maxLines(1)
+            .textOverflow({ overflow: TextOverflow.Ellipsis })
         }
         .alignItems(HorizontalAlign.Start)
         Blank()

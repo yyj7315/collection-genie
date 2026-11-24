@@ -3,6 +3,7 @@ import { relationalStore } from '@kit.ArkData';
 
 const DATABASE_NAME: string = 'collection_genie.db';
 const TABLE_NAME: string = 'collections';
+const DATABASE_SCHEMA_VERSION: number = 1;
 
 const CREATE_TABLE_SQL: string = `
 CREATE TABLE IF NOT EXISTS collections (
@@ -98,6 +99,7 @@ export class CollectionRepository {
     };
     this.store = await relationalStore.getRdbStore(context, config);
     await this.store.executeSql(CREATE_TABLE_SQL);
+    await this.migrateDatabase();
     await this.normalizeStoredTitles();
     await this.normalizeStoredSources();
     this.initialized = true;
@@ -229,6 +231,45 @@ export class CollectionRepository {
     return this.store;
   }
 
+  private async migrateDatabase(): Promise<void> {
+    const versionResult = await this.requireStore().querySql('PRAGMA user_version');
+    let currentVersion = 0;
+    if (versionResult.goToNextRow()) {
+      currentVersion = versionResult.getLong(versionResult.getColumnIndex('user_version'));
+    }
+    versionResult.close();
+
+    if (currentVersion < 1) {
+      await this.ensureColumn('author', 'TEXT NOT NULL DEFAULT \'\'');
+      await this.ensureColumn('cover_url', 'TEXT NOT NULL DEFAULT \'\'');
+      await this.ensureColumn('tags', 'TEXT NOT NULL DEFAULT \'\'');
+      await this.ensureColumn('summary', 'TEXT NOT NULL DEFAULT \'\'');
+      await this.ensureColumn('status', 'TEXT NOT NULL DEFAULT \'未看\'');
+      await this.ensureColumn('last_opened_time', 'INTEGER NOT NULL DEFAULT 0');
+      await this.ensureColumn('open_count', 'INTEGER NOT NULL DEFAULT 0');
+      await this.ensureColumn('share_count', 'INTEGER NOT NULL DEFAULT 1');
+      await this.ensureColumn('notes', 'TEXT NOT NULL DEFAULT \'\'');
+    }
+
+    if (currentVersion < DATABASE_SCHEMA_VERSION) {
+      await this.requireStore().executeSql(`PRAGMA user_version = ${DATABASE_SCHEMA_VERSION}`);
+    }
+  }
+
+  private async ensureColumn(columnName: string, definition: string): Promise<void> {
+    const resultSet = await this.requireStore().querySql(`PRAGMA table_info(${TABLE_NAME})`);
+    const columns: string[] = [];
+    while (resultSet.goToNextRow()) {
+      columns.push(resultSet.getString(resultSet.getColumnIndex('name')));
+    }
+    resultSet.close();
+    if (!columns.includes(columnName)) {
+      await this.requireStore().executeSql(
+        `ALTER TABLE ${TABLE_NAME} ADD COLUMN ${columnName} ${definition}`
+      );
+    }
+  }
+
   private async findByCanonicalUrl(url: string): Promise<CollectionItem | null> {
     const resultSet = await this.requireStore().querySql(
       'SELECT * FROM collections WHERE canonical_url = ? LIMIT 1',
@@ -294,7 +335,7 @@ export class CollectionRepository {
       const originalUrl = resultSet.getString(resultSet.getColumnIndex('original_url'));
       const currentCanonicalUrl = resultSet.getString(resultSet.getColumnIndex('canonical_url'));
       const currentTags = resultSet.getString(resultSet.getColumnIndex('tags'));
-      const detectedSource = this.detectSource(originalUrl);
+      const detectedSource = this.detectSource(originalUrl, '');
       if (detectedSource.length === 0) {
         continue;
       }
@@ -349,7 +390,7 @@ export class CollectionRepository {
   private parseShare(payload: string): ParsedShare {
     const urlMatch: RegExpMatchArray | null = payload.match(/https?:\/\/[^\s，。！？]+/i);
     const originalUrl = urlMatch === null ? '' : this.trimUrl(urlMatch[0]);
-    const detectedSource = this.detectSource(originalUrl);
+    const detectedSource = this.detectSource(originalUrl, payload);
     const source = detectedSource.length > 0 ? detectedSource : '其他来源';
     const titlePart = originalUrl.length > 0 ? payload.substring(0, payload.indexOf(originalUrl)) : payload;
     const cleanedTitle = this.cleanTitle(titlePart);
@@ -401,7 +442,7 @@ export class CollectionRepository {
     return authorMatch === null ? '' : authorMatch[1];
   }
 
-  private detectSource(url: string): string {
+  private detectSource(url: string, payload: string): string {
     if (this.matchesDomain(url, ['douyin.com', 'iesdouyin.com'])) {
       return '抖音精选';
     }
@@ -420,7 +461,119 @@ export class CollectionRepository {
     if (this.matchesDomain(url, ['youtube.com', 'youtu.be'])) {
       return 'YouTube';
     }
-    return '';
+    if (this.matchesDomain(url, ['zhihu.com'])) {
+      return '知乎';
+    }
+    if (this.matchesDomain(url, ['toutiao.com'])) {
+      return '今日头条';
+    }
+    if (this.matchesDomain(url, ['ixigua.com'])) {
+      return '西瓜视频';
+    }
+    if (this.matchesDomain(url, ['haokan.baidu.com'])) {
+      return '好看视频';
+    }
+    if (this.matchesDomain(url, ['baijiahao.baidu.com'])) {
+      return '百家号';
+    }
+    if (this.matchesDomain(url, ['music.163.com'])) {
+      return '网易云音乐';
+    }
+    if (this.matchesDomain(url, ['y.qq.com', 'c.y.qq.com'])) {
+      return 'QQ音乐';
+    }
+    if (this.matchesDomain(url, ['youku.com'])) {
+      return '优酷';
+    }
+    if (this.matchesDomain(url, ['iqiyi.com'])) {
+      return '爱奇艺';
+    }
+    if (this.matchesDomain(url, ['v.qq.com'])) {
+      return '腾讯视频';
+    }
+    if (this.matchesDomain(url, ['mgtv.com'])) {
+      return '芒果TV';
+    }
+    if (this.matchesDomain(url, ['douban.com'])) {
+      return '豆瓣';
+    }
+    if (this.matchesDomain(url, ['mp.weixin.qq.com'])) {
+      return '微信公众号';
+    }
+    if (this.matchesDomain(url, ['channels.weixin.qq.com'])) {
+      return '微信视频号';
+    }
+    if (this.matchesDomain(url, ['taobao.com'])) {
+      return '淘宝';
+    }
+    if (this.matchesDomain(url, ['tmall.com'])) {
+      return '天猫';
+    }
+    if (this.matchesDomain(url, ['jd.com'])) {
+      return '京东';
+    }
+    if (this.matchesDomain(url, ['pinduoduo.com', 'yangkeduo.com'])) {
+      return '拼多多';
+    }
+    if (this.matchesDomain(url, ['goofish.com'])) {
+      return '闲鱼';
+    }
+    if (this.matchesDomain(url, ['dianping.com'])) {
+      return '大众点评';
+    }
+    if (this.matchesDomain(url, ['meituan.com'])) {
+      return '美团';
+    }
+    if (this.matchesDomain(url, ['github.com'])) {
+      return 'GitHub';
+    }
+    if (this.matchesDomain(url, ['x.com', 'twitter.com'])) {
+      return 'X';
+    }
+    if (this.matchesDomain(url, ['instagram.com'])) {
+      return 'Instagram';
+    }
+    if (this.matchesDomain(url, ['tiktok.com'])) {
+      return 'TikTok';
+    }
+    if (this.matchesDomain(url, ['facebook.com'])) {
+      return 'Facebook';
+    }
+    if (this.matchesDomain(url, ['pinterest.com'])) {
+      return 'Pinterest';
+    }
+    if (this.matchesDomain(url, ['twitch.tv'])) {
+      return 'Twitch';
+    }
+    if (this.matchesDomain(url, ['spotify.com'])) {
+      return 'Spotify';
+    }
+
+    const domainSource = this.domainSourceName(url);
+    if (domainSource.length > 0) {
+      return domainSource;
+    }
+
+    const normalizedPayload = payload.toLowerCase();
+    if (normalizedPayload.includes('哔哩哔哩')) {
+      return '哔哩哔哩';
+    }
+    if (normalizedPayload.includes('抖音')) {
+      return '抖音精选';
+    }
+    if (normalizedPayload.includes('小红书')) {
+      return '小红书';
+    }
+    if (normalizedPayload.includes('快手')) {
+      return '快手';
+    }
+    if (normalizedPayload.includes('微博')) {
+      return '微博';
+    }
+    if (normalizedPayload.includes('知乎')) {
+      return '知乎';
+    }
+    return '其他来源';
   }
 
   private matchesDomain(url: string, domains: string[]): boolean {
@@ -436,6 +589,15 @@ export class CollectionRepository {
       }
     }
     return false;
+  }
+
+  private domainSourceName(url: string): string {
+    const hostMatch: RegExpMatchArray | null = url.match(/^https?:\/\/([^\/?#]+)/i);
+    if (hostMatch === null) {
+      return '';
+    }
+    const host = hostMatch[1].toLowerCase().replace(/:\d+$/, '');
+    return host.startsWith('www.') ? host.substring(4) : host;
   }
 
   private extractSourceItemId(url: string, source: string): string {
@@ -504,7 +666,13 @@ export class CollectionRepository {
   }
 
   private replacePlatformTag(tags: string, source: string): string {
-    const platformTags = ['抖音精选', '哔哩哔哩', '小红书', '快手', '微博', 'YouTube', '其他来源'];
+    const platformTags = [
+      '抖音精选', '哔哩哔哩', '小红书', '快手', '微博', '知乎', '今日头条',
+      '西瓜视频', '好看视频', '百家号', '网易云音乐', 'QQ音乐', '优酷', '爱奇艺',
+      '腾讯视频', '芒果TV', '豆瓣', '微信公众号', '微信视频号', '淘宝', '天猫',
+      '京东', '拼多多', '闲鱼', '大众点评', '美团', 'YouTube', 'GitHub', 'X',
+      'Instagram', 'TikTok', 'Facebook', 'Pinterest', 'Twitch', 'Spotify', '其他来源'
+    ];
     const parts = tags.split('|').filter((value: string) =>
       value.length > 0 && !platformTags.includes(value)
     );
