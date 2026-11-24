@@ -140,3 +140,11 @@
 - 未登录 GitHub API 返回 `visibility: public`。
 - 更新清单和 HAP 均可通过匿名 HTTPS 请求访问。
 - 真机默认更新地址已切换到 jsDelivr，成功返回“当前已是最新版本 v0.3.1”。
+
+## 9. 0.3.2 latest 标签验证
+
+![0.3.2 公开更新检查](artifacts/v0.3.2-public-update-check.jpeg)
+
+- 默认更新清单地址改为 jsDelivr 的 `latest` 标签。
+- `latest` 清单能够自动解析到当前最新版本 `0.3.2`。
+- 真机点击“检查更新”后正确显示“当前已是最新版本 v0.3.2”。
