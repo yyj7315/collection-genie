@@ -41,13 +41,17 @@
 
 ## 关键截图
 
-![分享面板](artifacts/final-share-panel.jpeg)
+![系统分享面板](artifacts/v0.3.2-share-panel.jpeg)
 
-![收藏首页](artifacts/mvp-v5-home.jpeg)
+![收藏首页](artifacts/v0.3.2-home.jpeg)
 
-![内容详情](artifacts/detail-updated-v5.jpeg)
+![内容库](artifacts/v0.3.2-library.jpeg)
 
-![统计页面](artifacts/mvp-stats-2.jpeg)
+![内容详情](artifacts/v0.3.2-detail.jpeg)
+
+![统计页面](artifacts/v0.3.2-stats.jpeg)
+
+![版本升级](artifacts/v0.3.2-settings.jpeg)
 
 ## 技术方案
 

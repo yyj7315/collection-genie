@@ -62,6 +62,37 @@ def redact_share_panel(image: Image.Image) -> Image.Image:
     return result
 
 
+def redact_latest_share_panel(image: Image.Image) -> Image.Image:
+    assert image.size == (1316, 2832)
+    result = image.convert("RGB")
+    draw = ImageDraw.Draw(result)
+
+    # Remove the creator nickname and shared-content preview.
+    draw.rounded_rectangle((286, 1208, 1250, 1462), radius=20, fill="#FFFFFF")
+    preview_text = "分享内容预览已隐藏"
+    preview_font = load_font(28)
+    preview_box = draw.textbbox((0, 0), preview_text, font=preview_font)
+    draw.text(
+        (286 + (964 - (preview_box[2] - preview_box[0])) // 2, 1302),
+        preview_text,
+        fill="#6E7F79",
+        font=preview_font,
+    )
+
+    # Remove all contact names, portraits, and profile identifiers.
+    draw.rounded_rectangle((0, 1590, 1316, 1955), radius=28, fill="#EEF3F1")
+    contacts_text = "联系人姓名和头像已隐藏"
+    contacts_font = load_font(28)
+    contacts_box = draw.textbbox((0, 0), contacts_text, font=contacts_font)
+    draw.text(
+        ((result.width - (contacts_box[2] - contacts_box[0])) // 2, 1735),
+        contacts_text,
+        fill="#6E7F79",
+        font=contacts_font,
+    )
+    return result
+
+
 def save_without_metadata(image: Image.Image, path: Path) -> None:
     image.save(path, format="JPEG", quality=95, optimize=True)
 
@@ -70,6 +101,9 @@ def main() -> None:
     share_panel = ARTIFACTS / "final-share-panel.jpeg"
     detail = ARTIFACTS / "detail-updated-v5.jpeg"
     open_original = ARTIFACTS / "open-original.jpeg"
+    latest_share_source = ARTIFACTS / "v0.3.2-share-panel-raw.jpeg"
+    latest_share_output = ARTIFACTS / "v0.3.2-share-panel.jpeg"
+    latest_detail = ARTIFACTS / "v0.3.2-detail.jpeg"
 
     save_without_metadata(
         redact_share_panel(Image.open(share_panel)),
@@ -83,10 +117,20 @@ def main() -> None:
         redact_author(Image.open(open_original)),
         open_original,
     )
+    save_without_metadata(
+        redact_latest_share_panel(Image.open(latest_share_source)),
+        latest_share_output,
+    )
+    save_without_metadata(
+        redact_author(Image.open(latest_detail)),
+        latest_detail,
+    )
 
     print("Redacted:", share_panel)
     print("Redacted:", detail)
     print("Redacted:", open_original)
+    print("Redacted:", latest_share_output)
+    print("Redacted:", latest_detail)
 
 
 if __name__ == "__main__":
