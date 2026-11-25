@@ -63,6 +63,8 @@
 
 ![版本升级](artifacts/v0.4.0-settings.jpeg)
 
+![在线更新检查](artifacts/v0.4.0-update-check.jpeg)
+
 ## 技术方案
 
 - ArkTS / ArkUI
