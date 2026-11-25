@@ -4,8 +4,8 @@
 
 ![收藏夹精灵应用图标](AppScope/resources/base/media/collection_icon.png)
 
-当前版本：`0.4.1`
-验证状态：0.4.1 已完成正式签名并上传华为应用市场；上架审核待补齐审核联系人和内容分级资料
+当前版本：`0.4.2`
+验证状态：0.4.2 已使用 HarmonyOS 26.0.0 Release SDK 重新构建，包内 API 类型为 `Release`，正式签名校验通过
 
 ## 已实现功能
 
@@ -87,22 +87,22 @@
 
 可安装的 HAP 包：
 
-[artifacts/collection-genie-0.4.1.hap](artifacts/collection-genie-0.4.1.hap)
+[artifacts/collection-genie-0.4.2.hap](artifacts/collection-genie-0.4.2.hap)
 
 SHA-256：
 
 ```text
-87983757bc70a05ba2f3009e3ed760a882ad862471ff836699a02d28841e4a6c
+e9a392829459de367d5e4e09e87f25365bb599c60e7ffad68f55b000444ed0e8
 ```
 
 华为应用市场使用正式签名的 App Pack：
 
-[artifacts/collection-genie-0.4.1.app](artifacts/collection-genie-0.4.1.app)
+[artifacts/collection-genie-0.4.2.app](artifacts/collection-genie-0.4.2.app)
 
 SHA-256：
 
 ```text
-c8c57c6ca71596098fe3a18d0a725943d73303d1fba8bb0212222bbc54f8c30c
+c2222d8edd1ffd5e9b70163bc331f94544e36470709a6f24bf94cbac50daef69
 ```
 
 该 HAP 使用正式发布证书和发布 Profile 签名，与早期调试签名版本不能直接覆盖安装。
@@ -144,7 +144,7 @@ HarmonyOS 对普通侧载应用不允许静默安装。正式上架后应优先�
 
 ## 开发与构建
 
-建议使用 DevEco Studio 6.0 或更高版本，并安装 HarmonyOS API 26 SDK。
+建议使用 DevEco Studio 6.0 或更高版本，并安装 HarmonyOS API 26 Release SDK。
 
 1. 用 DevEco Studio 打开项目根目录。
 2. 在 `Project Structure > Signing Configs` 中配置自动调试签名。

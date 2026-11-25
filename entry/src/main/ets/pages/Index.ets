@@ -62,7 +62,7 @@ struct Index {
   @State quickActionBusy: boolean = false;
   @State loading: boolean = true;
   @State bottomSafeInset: number = 40;
-  @State currentVersion: string = '0.4.1';
+  @State currentVersion: string = '0.4.2';
   @State updateManifestUrl: string = '';
   @State updateBusy: boolean = false;
   @State updateAvailable: boolean = false;

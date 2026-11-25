@@ -1,8 +1,8 @@
 {
-  "versionName": "0.4.0",
-  "versionCode": 1000009,
-  "downloadUrl": "https://cdn.jsdelivr.net/gh/yyj7315/collection-genie@v0.4.0/artifacts/collection-genie-0.4.0.hap",
-  "sha256": "5301DB52A8E83FC04C7C8325C6F18D5ACCDC85088966E7ECCDAEC0B3D3E80955",
-  "releaseNotes": "新增剪贴板快捷收录、截图二维码识别、电脑端文本选择扩展和自定义归类；升级保留现有收藏数据。",
-  "publishedAt": "2026-11-25T19:30:00+08:00"
+  "versionName": "0.4.2",
+  "versionCode": 1000011,
+  "downloadUrl": "https://cdn.jsdelivr.net/gh/yyj7315/collection-genie@v0.4.2/artifacts/collection-genie-0.4.2.hap",
+  "sha256": "E9A392829459DE367D5E4E09E87F25365BB599C60E7FFAD68F55B000444ED0E8",
+  "releaseNotes": "使用 HarmonyOS 26.0.0 Release SDK 重新构建，修复应用市场 Beta API 校验问题；应用包仅支持手机设备。",
+  "publishedAt": "2026-11-25T22:45:00+08:00"
 }
