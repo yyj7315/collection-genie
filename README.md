@@ -5,7 +5,7 @@
 ![收藏夹精灵应用图标](AppScope/resources/base/media/collection_icon.png)
 
 当前版本：`0.4.2`
-验证状态：0.4.2 已使用 HarmonyOS 26.0.0 Release SDK 重新构建，包内 API 类型为 `Release`，正式签名校验通过
+验证状态：0.4.2 已上传 AppGallery，包内 API 类型为 `Release`，正式签名校验与华为智能预检通过
 
 ## 已实现功能
 
