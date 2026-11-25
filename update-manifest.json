@@ -1,8 +1,8 @@
 {
-  "versionName": "0.3.2",
-  "versionCode": 1000008,
-  "downloadUrl": "https://cdn.jsdelivr.net/gh/yyj7315/collection-genie@v0.3.2/artifacts/collection-genie-0.3.2.hap",
-  "sha256": "CF05538285A64679BB12560AEBCBE7C285E3A5FA96BE285231D538962901AC76",
-  "releaseNotes": "更新清单改用 jsDelivr latest 标签，后续发布新版本标签即可自动获取升级信息。",
-  "publishedAt": "2026-11-24T11:36:00+08:00"
+  "versionName": "0.4.0",
+  "versionCode": 1000009,
+  "downloadUrl": "https://cdn.jsdelivr.net/gh/yyj7315/collection-genie@v0.4.0/artifacts/collection-genie-0.4.0.hap",
+  "sha256": "5301DB52A8E83FC04C7C8325C6F18D5ACCDC85088966E7ECCDAEC0B3D3E80955",
+  "releaseNotes": "新增剪贴板快捷收录、截图二维码识别、电脑端文本选择扩展和自定义归类；升级保留现有收藏数据。",
+  "publishedAt": "2026-11-25T19:30:00+08:00"
 }

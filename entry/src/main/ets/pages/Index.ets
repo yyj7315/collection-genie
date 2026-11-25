@@ -1,6 +1,8 @@
 import { common } from '@kit.AbilityKit';
 import { promptAction, window } from '@kit.ArkUI';
 import { pasteboard } from '@kit.BasicServicesKit';
+import { photoAccessHelper } from '@kit.MediaLibraryKit';
+import { detectBarcode, scanBarcode, scanCore } from '@kit.ScanKit';
 import {
   AddCollectionResult,
   CollectionItem,
@@ -10,29 +12,6 @@ import {
   UpdateManifest,
   UpdateService
 } from '../data/UpdateService';
-
-const CATEGORIES: string[] = [
-  '全部',
-  '待整理',
-  '健康运动',
-  '学习成长',
-  '科技数码',
-  '影视娱乐',
-  '生活方式',
-  '美食',
-  '旅行'
-];
-
-const EDITABLE_CATEGORIES: string[] = [
-  '待整理',
-  '健康运动',
-  '学习成长',
-  '科技数码',
-  '影视娱乐',
-  '生活方式',
-  '美食',
-  '旅行'
-];
 
 @Component
 struct MetricCardView {
@@ -72,14 +51,18 @@ struct Index {
 
   @State activeTab: number = 0;
   @State items: CollectionItem[] = [];
+  @State categories: string[] = ['全部'];
+  @State editableCategories: string[] = [];
   @State searchText: string = '';
+  @State newCategoryName: string = '';
   @State selectedCategory: string = '全部';
   @State selectedItem: CollectionItem | null = null;
   @State shareNotice: string = '';
   @State shareNoticeSuccess: boolean = true;
+  @State quickActionBusy: boolean = false;
   @State loading: boolean = true;
   @State bottomSafeInset: number = 40;
-  @State currentVersion: string = '0.3.0';
+  @State currentVersion: string = '0.4.0';
   @State updateManifestUrl: string = '';
   @State updateBusy: boolean = false;
   @State updateAvailable: boolean = false;
@@ -151,27 +134,143 @@ struct Index {
     if (payload.length === 0) {
       return;
     }
-    try {
-      const result: AddCollectionResult = await this.repository.addFromShare(payload);
-      AppStorage.setOrCreate('pendingSharePayloadText', '');
-      await this.refreshItems();
-      this.activeTab = 1;
-      this.shareNoticeSuccess = true;
-      this.shareNotice = result.created
-        ? `已收录到「${result.category}」`
-        : `这条内容已经收藏过，本次分享次数已累计`;
-      this.selectedItem = null;
-    } catch (error) {
-      this.shareNoticeSuccess = false;
-      this.shareNotice = `分享内容保存失败：${String(error)}`;
-    }
+    AppStorage.setOrCreate('pendingSharePayloadText', '');
+    await this.savePayload(payload, '分享内容');
   }
 
   private async refreshItems(): Promise<void> {
     this.items = await this.repository.getAll();
+    this.editableCategories = await this.repository.getCategories();
+    const allCategories: string[] = ['全部'];
+    for (let index = 0; index < this.editableCategories.length; index++) {
+      allCategories.push(this.editableCategories[index]);
+    }
+    this.categories = allCategories;
+    if (!this.categories.includes(this.selectedCategory)) {
+      this.selectedCategory = '全部';
+    }
     this.loading = false;
     if (this.selectedItem !== null) {
       this.selectedItem = await this.repository.findById(this.selectedItem.id);
+    }
+  }
+
+  private async savePayload(payload: string, origin: string): Promise<void> {
+    try {
+      const result: AddCollectionResult = await this.repository.addFromShare(payload);
+      await this.refreshItems();
+      this.activeTab = 1;
+      this.shareNoticeSuccess = true;
+      this.shareNotice = result.created
+        ? `已从${origin}收录到「${result.category}」`
+        : `这条内容已经收藏过，本次记录次数已累计`;
+      this.selectedItem = null;
+    } catch (error) {
+      this.shareNoticeSuccess = false;
+      this.shareNotice = `${origin}收录失败：${String(error)}`;
+    }
+  }
+
+  private async collectFromClipboard(): Promise<void> {
+    if (this.quickActionBusy) {
+      return;
+    }
+    this.quickActionBusy = true;
+    try {
+      const board = pasteboard.getSystemPasteboard();
+      const hasData = await board.hasData();
+      if (!hasData) {
+        this.shareNoticeSuccess = false;
+        this.shareNotice = '剪贴板为空，请先复制视频分享文字或链接。';
+        return;
+      }
+      const data = await board.getData();
+      const text = data.getPrimaryText().trim();
+      if (text.length === 0) {
+        this.shareNoticeSuccess = false;
+        this.shareNotice = '剪贴板里没有可收录的文本。';
+        return;
+      }
+      if (this.extractHttpUrl(text).length === 0) {
+        this.shareNoticeSuccess = false;
+        this.shareNotice = '没有在剪贴板中找到 http(s) 链接，请复制完整的分享文字后再试。';
+        return;
+      }
+      await this.savePayload(text, '剪贴板');
+    } catch (error) {
+      this.shareNoticeSuccess = false;
+      this.shareNotice = `读取剪贴板失败：${String(error)}`;
+    } finally {
+      this.quickActionBusy = false;
+    }
+  }
+
+  private async collectFromScreenshotQRCode(): Promise<void> {
+    if (this.quickActionBusy) {
+      return;
+    }
+    this.quickActionBusy = true;
+    this.shareNotice = '';
+    try {
+      const options = new photoAccessHelper.PhotoSelectOptions();
+      options.MIMEType = photoAccessHelper.PhotoViewMIMETypes.IMAGE_TYPE;
+      options.maxSelectNumber = 1;
+      const picker = new photoAccessHelper.PhotoViewPicker();
+      const selected = await picker.select(options);
+      if (selected.photoUris.length === 0) {
+        return;
+      }
+      const scanOptions: scanBarcode.ScanOptions = {
+        scanTypes: [scanCore.ScanType.QR_CODE]
+      };
+      const results = await detectBarcode.decode(
+        { uri: selected.photoUris[0] },
+        scanOptions
+      );
+      let payload = '';
+      for (let index = 0; index < results.length; index++) {
+        payload = this.extractHttpUrl(results[index].originalValue);
+        if (payload.length > 0) {
+          break;
+        }
+      }
+      if (payload.length === 0) {
+        this.shareNoticeSuccess = false;
+        this.shareNotice = '图片中没有识别到包含网址的二维码。';
+        return;
+      }
+      await this.savePayload(payload, '截图二维码');
+    } catch (error) {
+      this.shareNoticeSuccess = false;
+      this.shareNotice = `截图二维码识别失败：${String(error)}`;
+    } finally {
+      this.quickActionBusy = false;
+    }
+  }
+
+  private extractHttpUrl(value: string): string {
+    const match: RegExpMatchArray | null = value.match(/https?:\/\/[^\s，。！？；;]+/i);
+    if (match === null) {
+      return '';
+    }
+    let url = match[0].trim();
+    while (url.length > 0 && '.,!?;:，。！？；：）)】]'.includes(url.charAt(url.length - 1))) {
+      url = url.substring(0, url.length - 1);
+    }
+    return url;
+  }
+
+  private async createCategory(): Promise<void> {
+    try {
+      const created = await this.repository.addCategory(this.newCategoryName);
+      this.newCategoryName = '';
+      await this.refreshItems();
+      this.selectedCategory = created;
+      this.activeTab = 1;
+      this.shareNoticeSuccess = true;
+      this.shareNotice = `已新增归类「${created}」，可在内容详情中选择它。`;
+    } catch (error) {
+      promptAction.showToast({ message: String(error) });
     }
   }
 
@@ -588,6 +687,74 @@ struct Index {
         }
         .width('100%')
 
+        Column({ space: 12 }) {
+          Row() {
+            Column({ space: 3 }) {
+              Text('快捷收录')
+                .fontSize(20)
+                .fontWeight(FontWeight.Bold)
+                .fontColor('#173B34')
+              Text('不用切换分享面板，复制链接或选一张截图即可')
+                .fontSize(13)
+                .fontColor('#74857F')
+            }
+            .alignItems(HorizontalAlign.Start)
+            .layoutWeight(1)
+            Text('本地处理')
+              .fontSize(11)
+              .fontColor('#0B8268')
+              .padding({ left: 9, right: 9, top: 5, bottom: 5 })
+              .backgroundColor('#E1F5ED')
+              .borderRadius(11)
+          }
+          .width('100%')
+
+          Row({ space: 10 }) {
+            PasteButton({
+              icon: PasteIconStyle.LINES,
+              text: PasteDescription.PASTE,
+              buttonType: ButtonType.Capsule
+            })
+              .width('48%')
+              .height(46)
+              .fontSize(14)
+              .backgroundColor('#168F77')
+              .fontColor('#FFFFFF')
+              .enabled(!this.quickActionBusy)
+              .onClick((event: ClickEvent, result: PasteButtonOnClickResult) => {
+                if (result === PasteButtonOnClickResult.SUCCESS) {
+                  this.collectFromClipboard();
+                } else {
+                  this.shareNoticeSuccess = false;
+                  this.shareNotice = '系统未授予本次剪贴板读取权限。';
+                }
+              })
+            Button('识别截图二维码')
+              .layoutWeight(1)
+              .height(46)
+              .fontSize(14)
+              .backgroundColor('#E5F1ED')
+              .fontColor('#126B59')
+              .enabled(!this.quickActionBusy)
+              .opacity(this.quickActionBusy ? 0.6 : 1)
+              .onClick(() => {
+                this.collectFromScreenshotQRCode();
+              })
+          }
+          .width('100%')
+
+          Text('只在你点击按钮时读取剪贴板或选择图片；不会在后台自动读取。')
+            .fontSize(11)
+            .lineHeight(17)
+            .fontColor('#7A8B86')
+            .width('100%')
+        }
+        .width('100%')
+        .alignItems(HorizontalAlign.Start)
+        .padding(16)
+        .backgroundColor('#FFFFFF')
+        .borderRadius(18)
+
         if (this.shareNotice.length > 0) {
           Row({ space: 10 }) {
             Text(this.shareNoticeSuccess ? '✓' : '!')
@@ -691,9 +858,35 @@ struct Index {
           this.searchText = value;
         })
 
+      Row({ space: 8 }) {
+        TextInput({ placeholder: '新增自己的归类，例如「产品灵感」', text: this.newCategoryName })
+          .layoutWeight(1)
+          .height(40)
+          .fontSize(13)
+          .maxLength(16)
+          .backgroundColor('#FFFFFF')
+          .borderRadius(12)
+          .onChange((value: string) => {
+            this.newCategoryName = value;
+          })
+          .onSubmit(() => {
+            this.createCategory();
+          })
+        Button('新增归类')
+          .height(40)
+          .fontSize(13)
+          .backgroundColor('#E5F1ED')
+          .fontColor('#126B59')
+          .onClick(() => {
+            this.createCategory();
+          })
+      }
+      .width('100%')
+      .padding({ left: 16, right: 16 })
+
       Scroll() {
         Row({ space: 8 }) {
-          ForEach(CATEGORIES, (category: string) => {
+          ForEach(this.categories, (category: string) => {
             Text(category === '全部' ? `全部 ${this.items.length}` : `${category} ${this.categoryCount(category)}`)
               .fontSize(13)
               .fontColor(this.selectedCategory === category ? '#FFFFFF' : '#4F625C')
@@ -762,7 +955,7 @@ struct Index {
 
         Column({ space: 14 }) {
           this.SectionTitle('分类分布', '自动分类结果，可在详情页随时修改')
-          ForEach(EDITABLE_CATEGORIES, (category: string) => {
+          ForEach(this.editableCategories, (category: string) => {
             Column({ space: 7 }) {
               Row() {
                 Text(category)
@@ -957,14 +1150,37 @@ struct Index {
             .fontSize(18)
             .fontWeight(FontWeight.Bold)
             .fontColor('#173B34')
-          Text('1. 在抖音精选、哔哩哔哩、小红书等应用的内容页点击「分享」。')
+          Text('方式一：在抖音精选、哔哩哔哩、小红书等应用点击「分享 → 系统分享 → 收藏夹精灵」。')
             .fontSize(14)
+            .lineHeight(21)
             .fontColor('#4B615B')
-          Text('2. 在「系统分享」中向左滑动，选择「收藏夹精灵」。')
+          Text('方式二：先复制视频分享文字或链接，回到首页点击「从剪贴板收录」。')
             .fontSize(14)
+            .lineHeight(21)
             .fontColor('#4B615B')
-          Text('3. 回到本应用后，系统会解析链接、自动分类并去重。')
+          Text('方式三：保存带二维码的截图，在首页点击「识别截图二维码」并选择图片。')
             .fontSize(14)
+            .lineHeight(21)
+            .fontColor('#4B615B')
+          Text('方式四（电脑/二合一设备）：在支持划词扩展的应用中选中文字，通过系统的划词菜单收藏。手机系统当前不开放这一入口。')
+            .fontSize(13)
+            .lineHeight(20)
+            .fontColor('#6D7F79')
+        }
+        .width('100%')
+        .alignItems(HorizontalAlign.Start)
+        .padding(17)
+        .backgroundColor('#FFFFFF')
+        .borderRadius(18)
+
+        Column({ space: 10 }) {
+          Text('自定义归类')
+            .fontSize(18)
+            .fontWeight(FontWeight.Bold)
+            .fontColor('#173B34')
+          Text('进入「内容库」，在搜索框下方输入名称并点击「新增归类」。新归类会持久化保存，并出现在筛选、统计和内容详情中。')
+            .fontSize(14)
+            .lineHeight(22)
             .fontColor('#4B615B')
         }
         .width('100%')
@@ -1130,7 +1346,7 @@ struct Index {
               .fontWeight(FontWeight.Bold)
               .fontColor('#2C4841')
             Flex({ wrap: FlexWrap.Wrap }) {
-              ForEach(EDITABLE_CATEGORIES, (category: string) => {
+              ForEach(this.editableCategories, (category: string) => {
                 Text(category)
                   .fontSize(13)
                   .fontColor(item.category === category ? '#FFFFFF' : '#52655F')

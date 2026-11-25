@@ -3,7 +3,19 @@ import { relationalStore } from '@kit.ArkData';
 
 const DATABASE_NAME: string = 'collection_genie.db';
 const TABLE_NAME: string = 'collections';
-const DATABASE_SCHEMA_VERSION: number = 1;
+const CATEGORY_TABLE_NAME: string = 'categories';
+const DATABASE_SCHEMA_VERSION: number = 2;
+
+const DEFAULT_CATEGORIES: string[] = [
+  '待整理',
+  '健康运动',
+  '学习成长',
+  '科技数码',
+  '影视娱乐',
+  '生活方式',
+  '美食',
+  '旅行'
+];
 
 const CREATE_TABLE_SQL: string = `
 CREATE TABLE IF NOT EXISTS collections (
@@ -24,6 +36,14 @@ CREATE TABLE IF NOT EXISTS collections (
   open_count INTEGER NOT NULL DEFAULT 0,
   share_count INTEGER NOT NULL DEFAULT 1,
   notes TEXT NOT NULL DEFAULT ''
+)`;
+
+const CREATE_CATEGORY_TABLE_SQL: string = `
+CREATE TABLE IF NOT EXISTS categories (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  name TEXT NOT NULL UNIQUE,
+  sort_order INTEGER NOT NULL DEFAULT 0,
+  created_time INTEGER NOT NULL
 )`;
 
 export interface CollectionItem {
@@ -100,9 +120,62 @@ export class CollectionRepository {
     this.store = await relationalStore.getRdbStore(context, config);
     await this.store.executeSql(CREATE_TABLE_SQL);
     await this.migrateDatabase();
+    await this.seedDefaultCategories();
     await this.normalizeStoredTitles();
     await this.normalizeStoredSources();
     this.initialized = true;
+  }
+
+  async getCategories(): Promise<string[]> {
+    const resultSet = await this.requireStore().querySql(
+      `SELECT name FROM ${CATEGORY_TABLE_NAME} ORDER BY sort_order ASC, id ASC`
+    );
+    const categories: string[] = [];
+    while (resultSet.goToNextRow()) {
+      categories.push(resultSet.getString(resultSet.getColumnIndex('name')));
+    }
+    resultSet.close();
+    return categories;
+  }
+
+  async addCategory(name: string): Promise<string> {
+    const normalizedName = this.normalizeCategoryName(name);
+    if (normalizedName.length === 0) {
+      throw new Error('归类名称不能为空。');
+    }
+    if (normalizedName === '全部') {
+      throw new Error('“全部”是系统筛选项，不能作为归类名称。');
+    }
+    if (normalizedName.length > 16) {
+      throw new Error('归类名称不能超过 16 个字符。');
+    }
+
+    const existing = await this.requireStore().querySql(
+      `SELECT id FROM ${CATEGORY_TABLE_NAME} WHERE name = ? LIMIT 1`,
+      [normalizedName]
+    );
+    const duplicated = existing.goToNextRow();
+    existing.close();
+    if (duplicated) {
+      throw new Error('这个归类已经存在。');
+    }
+
+    const orderResult = await this.requireStore().querySql(
+      `SELECT COALESCE(MAX(sort_order), 0) AS max_order FROM ${CATEGORY_TABLE_NAME}`
+    );
+    let nextOrder = 1;
+    if (orderResult.goToNextRow()) {
+      nextOrder = orderResult.getLong(orderResult.getColumnIndex('max_order')) + 1;
+    }
+    orderResult.close();
+
+    const values: relationalStore.ValuesBucket = {
+      'name': normalizedName,
+      'sort_order': nextOrder,
+      'created_time': Date.now()
+    };
+    await this.requireStore().insert(CATEGORY_TABLE_NAME, values);
+    return normalizedName;
   }
 
   async addFromShare(payload: string): Promise<AddCollectionResult> {
@@ -251,9 +324,32 @@ export class CollectionRepository {
       await this.ensureColumn('notes', 'TEXT NOT NULL DEFAULT \'\'');
     }
 
+    if (currentVersion < 2) {
+      await this.requireStore().executeSql(CREATE_CATEGORY_TABLE_SQL);
+    }
+
     if (currentVersion < DATABASE_SCHEMA_VERSION) {
       await this.requireStore().executeSql(`PRAGMA user_version = ${DATABASE_SCHEMA_VERSION}`);
     }
+  }
+
+  private async seedDefaultCategories(): Promise<void> {
+    for (let index = 0; index < DEFAULT_CATEGORIES.length; index++) {
+      const values: relationalStore.ValuesBucket = {
+        'name': DEFAULT_CATEGORIES[index],
+        'sort_order': index,
+        'created_time': Date.now()
+      };
+      await this.requireStore().insert(
+        CATEGORY_TABLE_NAME,
+        values,
+        relationalStore.ConflictResolution.ON_CONFLICT_IGNORE
+      );
+    }
+  }
+
+  private normalizeCategoryName(name: string): string {
+    return name.trim().replace(/\s+/g, ' ');
   }
 
   private async ensureColumn(columnName: string, definition: string): Promise<void> {

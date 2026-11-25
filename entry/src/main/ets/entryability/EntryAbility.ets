@@ -23,11 +23,11 @@ interface ShareTestResult {
 
 export default class EntryAbility extends UIAbility {
   onCreate(want: Want, launchParam: AbilityConstant.LaunchParam): void {
-    this.parseShare(want);
+    this.parseIncoming(want);
   }
 
   onNewWant(want: Want, launchParam: AbilityConstant.LaunchParam): void {
-    this.parseShare(want);
+    this.parseIncoming(want);
   }
 
   onWindowStageCreate(windowStage: window.WindowStage): void {
@@ -36,6 +36,18 @@ export default class EntryAbility extends UIAbility {
         console.error(`Failed to load Index. Code: ${error.code}, message: ${error.message}`);
       }
     });
+  }
+
+  private parseIncoming(want: Want): void {
+    const parameters = want.parameters;
+    if (parameters !== undefined) {
+      const directPayload = parameters['collectionPayload'];
+      if (typeof directPayload === 'string' && directPayload.trim().length > 0) {
+        this.publishDirectPayload(directPayload.trim(), want.bundleName ?? '同应用入口');
+        return;
+      }
+    }
+    this.parseShare(want);
   }
 
   private parseShare(want: Want): void {
@@ -77,6 +89,31 @@ export default class EntryAbility extends UIAbility {
           this.publishResult(result);
         }
       });
+  }
+
+  private publishDirectPayload(payload: string, launchSource: string): void {
+    const result: ShareTestResult = {
+      receivedAt: new Date().toISOString(),
+      launchSource: launchSource,
+      wantUri: '',
+      recordCount: 1,
+      records: [
+        {
+          utd: 'general.hyperlink',
+          title: '',
+          label: '划词扩展',
+          description: '',
+          content: payload,
+          uri: ''
+        }
+      ],
+      error: ''
+    };
+    AppStorage.setOrCreate('shareTestResult', JSON.stringify(result, null, 2));
+    AppStorage.setOrCreate('sharePayloadText', payload);
+    AppStorage.setOrCreate('shareReceived', true);
+    AppStorage.setOrCreate('pendingSharePayloadText', payload);
+    AppStorage.setOrCreate('shareSignal', Date.now());
   }
 
   private publishResult(result: ShareTestResult): void {

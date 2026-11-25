@@ -4,8 +4,8 @@
 
 ![收藏夹精灵应用图标](AppScope/resources/base/media/collection_icon.png)
 
-当前版本：`0.3.2`
-验证状态：已在 HarmonyOS 7 真机完成核心链路测试
+当前版本：`0.4.0`
+验证状态：已在 HarmonyOS 7 真机完成系统分享、剪贴板、截图二维码和自定义归类回归
 
 ## 已实现功能
 
@@ -16,12 +16,16 @@
 - 基于规则的内容自动分类
 - 同一内容重复分享时合并为一条记录并累计分享次数
 - 分类筛选、标题/作者/标签/笔记搜索
+- 内容库可新增自定义归类，归类持久化到本地数据库，并同步用于筛选、统计和详情页
 - 内容详情、打开原视频、复制链接
 - 手动修改分类、状态和笔记
+- 首页剪贴板快捷收录：通过系统 `PasteButton` 临时授权，只在用户点击时读取
+- 截图二维码识别：从相册选择截图，识别二维码中的 HTTPS/HTTP 链接并收录
+- 文本选择扩展：在支持划词扩展的电脑/二合一设备上，通过系统划词面板收藏选中的文字
 - 首页指标、最近收录、今日回看
 - 分类分布、打开数、完成数和待清理统计
 - 本地关系型数据库持久化
-- 数据库 schema 版本与增量迁移机制
+- 数据库 schema v2 与增量迁移机制，新增 `categories` 表并保留既有收藏
 - 应用市场更新检测，以及自定义 HTTPS 更新清单、HAP 下载和 SHA-256 校验
 - 默认不联网、不登录抖音、不读取抖音私有收藏
 
@@ -43,15 +47,21 @@
 
 ![系统分享面板](artifacts/v0.3.2-share-panel.jpeg)
 
-![收藏首页](artifacts/v0.3.2-home.jpeg)
+![收藏首页与快捷收录](artifacts/v0.4.0-home.jpeg)
 
-![内容库](artifacts/v0.3.2-library.jpeg)
+![内容库与自定义归类](artifacts/v0.4.0-library.jpeg)
 
-![内容详情](artifacts/v0.3.2-detail.jpeg)
+![剪贴板收录结果](artifacts/v0.4.0-paste-result.jpeg)
 
-![统计页面](artifacts/v0.3.2-stats.jpeg)
+![截图二维码收录结果](artifacts/v0.4.0-qr-result.jpeg)
 
-![版本升级](artifacts/v0.3.2-settings.jpeg)
+![内容详情](artifacts/v0.4.0-detail.jpeg)
+
+![自定义归类](artifacts/v0.4.0-category-assigned.jpeg)
+
+![统计页面](artifacts/v0.4.0-stats.jpeg)
+
+![版本升级](artifacts/v0.4.0-settings.jpeg)
 
 ## 技术方案
 
@@ -67,18 +77,20 @@
 - `entry/src/main/ets/entryability/EntryAbility.ets`：接收和分析系统分享数据。
 - `entry/src/main/ets/data/CollectionRepository.ets`：收藏数据模型、分类、去重和数据库操作。
 - `entry/src/main/ets/pages/Index.ets`：首页、内容库、统计、详情和设置界面。
+- `entry/src/main/ets/selectionextability/SelectionExtAbility.ets`：系统文本选择扩展。
+- `entry/src/main/ets/pages/SelectionMenuPanel.ets`：划词后的快捷收藏面板。
 - `entry/src/main/module.json5`：注册系统分享目标。
 
 ## 安装包
 
 可直接安装的调试签名包：
 
-[artifacts/collection-genie-0.3.2.hap](artifacts/collection-genie-0.3.2.hap)
+[artifacts/collection-genie-0.4.0.hap](artifacts/collection-genie-0.4.0.hap)
 
 SHA-256：
 
 ```text
-cf05538285a64679bb12560aebcbe7c285e3a5fa96be285231d538962901ac76
+5301db52a8e83fc04c7c8325c6f18d5accdc85088966e7eccdaec0b3d3e80955
 ```
 
 该 Profile 只绑定当前测试手机的 UDID，重新签名前不能保证安装到其他手机。
@@ -92,6 +104,14 @@ cf05538285a64679bb12560aebcbe7c285e3a5fa96be285231d538962901ac76
 5. 回到收藏夹精灵后，内容会进入内容库并自动分类。
 
 哔哩哔哩、小红书、快手、微博、知乎等应用同样通过“分享 → 系统分享 → 收藏夹精灵”收录。
+
+其他收录方式：
+
+1. 复制视频分享文字或链接，在首页点击系统“粘贴”按钮，完成后自动收录。
+2. 保存包含二维码的截图，在首页点击“识别截图二维码”，选择图片后自动提取链接。
+3. 在电脑/二合一设备的支持应用中选中文字，通过系统划词菜单选择“收藏夹精灵”。
+
+自定义归类：进入“内容库”，在搜索框下方输入归类名称并点击“新增归类”。该归类会立即出现在分类筛选、统计分布和内容详情中。
 
 ## 版本升级
 
@@ -120,10 +140,12 @@ HarmonyOS 对普通侧载应用不允许静默安装。正式上架后应优先�
 
 - 不自动读取抖音账号下的既有收藏。
 - 只处理用户主动分享到应用的内容。
+- HarmonyOS 的文本选择扩展目前只支持 PC/二合一设备，Android 风格手机不显示该划词入口；手机请使用分享、剪贴板和截图二维码方式。
 - 平台来源依赖分享链接中的域名；无法识别的链接显示为“其他来源”。
 - 抖音短链接暂不保证能解析封面、作者、时长等完整元数据。
 - 由于系统内存在两个抖音应用，点击“打开原视频”时可能显示应用选择器。
 - 自动分类当前为本地关键词规则，后续可接入端侧或云端模型提高准确率。
+- 归类当前支持新增与使用，暂不支持删除或重命名。
 - 尚未实现账号同步、多设备同步、文件导入导出和批量清理。
 
 ## 验证命令
