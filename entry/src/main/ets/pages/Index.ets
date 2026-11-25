@@ -62,7 +62,7 @@ struct Index {
   @State quickActionBusy: boolean = false;
   @State loading: boolean = true;
   @State bottomSafeInset: number = 40;
-  @State currentVersion: string = '0.4.0';
+  @State currentVersion: string = '0.4.1';
   @State updateManifestUrl: string = '';
   @State updateBusy: boolean = false;
   @State updateAvailable: boolean = false;
@@ -1198,6 +1198,30 @@ struct Index {
             .fontSize(14)
             .lineHeight(22)
             .fontColor('#4B615B')
+          Text('查看完整隐私政策')
+            .fontSize(14)
+            .fontWeight(FontWeight.Medium)
+            .fontColor('#0B8268')
+            .onClick(async () => {
+              const context = getContext(this) as common.UIAbilityContext;
+              try {
+                await context.openLink('https://github.com/yyj7315/collection-genie/blob/main/PRIVACY.md');
+              } catch (error) {
+                promptAction.showToast({ message: `无法打开隐私政策：${String(error)}` });
+              }
+            })
+          Text('问题反馈')
+            .fontSize(14)
+            .fontWeight(FontWeight.Medium)
+            .fontColor('#0B8268')
+            .onClick(async () => {
+              const context = getContext(this) as common.UIAbilityContext;
+              try {
+                await context.openLink('https://github.com/yyj7315/collection-genie/issues');
+              } catch (error) {
+                promptAction.showToast({ message: `无法打开问题反馈：${String(error)}` });
+              }
+            })
         }
         .width('100%')
         .alignItems(HorizontalAlign.Start)

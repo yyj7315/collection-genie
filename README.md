@@ -4,8 +4,8 @@
 
 ![收藏夹精灵应用图标](AppScope/resources/base/media/collection_icon.png)
 
-当前版本：`0.4.0`
-验证状态：已在 HarmonyOS 7 真机完成系统分享、剪贴板、截图二维码和自定义归类回归
+当前版本：`0.4.1`
+验证状态：0.4.1 已完成正式签名并上传华为应用市场；上架审核待补齐审核联系人和内容分级资料
 
 ## 已实现功能
 
@@ -85,17 +85,27 @@
 
 ## 安装包
 
-可直接安装的调试签名包：
+可安装的 HAP 包：
 
-[artifacts/collection-genie-0.4.0.hap](artifacts/collection-genie-0.4.0.hap)
+[artifacts/collection-genie-0.4.1.hap](artifacts/collection-genie-0.4.1.hap)
 
 SHA-256：
 
 ```text
-5301db52a8e83fc04c7c8325c6f18d5accdc85088966e7eccdaec0b3d3e80955
+87983757bc70a05ba2f3009e3ed760a882ad862471ff836699a02d28841e4a6c
 ```
 
-该 Profile 只绑定当前测试手机的 UDID，重新签名前不能保证安装到其他手机。
+华为应用市场使用正式签名的 App Pack：
+
+[artifacts/collection-genie-0.4.1.app](artifacts/collection-genie-0.4.1.app)
+
+SHA-256：
+
+```text
+c8c57c6ca71596098fe3a18d0a725943d73303d1fba8bb0212222bbc54f8c30c
+```
+
+该 HAP 使用正式发布证书和发布 Profile 签名，与早期调试签名版本不能直接覆盖安装。
 
 ## 使用方式
 
@@ -114,6 +124,10 @@ SHA-256：
 3. 在电脑/二合一设备的支持应用中选中文字，通过系统划词菜单选择“收藏夹精灵”。
 
 自定义归类：进入“内容库”，在搜索框下方输入归类名称并点击“新增归类”。该归类会立即出现在分类筛选、统计分布和内容详情中。
+
+隐私政策：[PRIVACY.md](PRIVACY.md)
+
+华为应用市场上架资料：[STORE_LISTING.md](STORE_LISTING.md)
 
 ## 版本升级
 

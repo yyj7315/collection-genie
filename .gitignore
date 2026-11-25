@@ -26,6 +26,8 @@ local.properties
 !/artifacts/collection-genie-0.3.1.hap
 !/artifacts/collection-genie-0.3.2.hap
 !/artifacts/collection-genie-0.4.0.hap
+!/artifacts/collection-genie-0.4.1.hap
+!/artifacts/collection-genie-0.4.1.app
 !/artifacts/v0.3.2-home.jpeg
 !/artifacts/v0.3.2-library.jpeg
 !/artifacts/v0.3.2-detail.jpeg
@@ -41,4 +43,6 @@ local.properties
 !/artifacts/v0.4.0-stats.jpeg
 !/artifacts/v0.4.0-settings.jpeg
 !/artifacts/v0.4.0-update-check.jpeg
+!/artifacts/store/
+!/artifacts/store/*.jpg
 !/artifacts/github-public-repository.png
