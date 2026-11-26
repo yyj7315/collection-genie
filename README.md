@@ -4,8 +4,8 @@
 
 ![收藏夹精灵应用图标](AppScope/resources/base/media/collection_icon.png)
 
-当前版本：`0.4.2`
-验证状态：0.4.2 已提交 AppGallery 审核，当前处于预审中；包内 API 类型为 `Release`，正式签名校验与华为智能预检通过
+当前版本：`0.4.3`
+验证状态：0.4.3 针对 AppGallery 隐私审核意见增加首次启动隐私政策确认，并等待重新构建、上传和提交审核
 
 ## 已实现功能
 
@@ -87,22 +87,22 @@
 
 可安装的 HAP 包：
 
-[artifacts/collection-genie-0.4.2.hap](artifacts/collection-genie-0.4.2.hap)
+[artifacts/collection-genie-0.4.3.hap](artifacts/collection-genie-0.4.3.hap)
 
 SHA-256：
 
 ```text
-e9a392829459de367d5e4e09e87f25365bb599c60e7ffad68f55b000444ed0e8
+3f5307adf47ee96d20f44399e2e3f0e6c6a1f58ca8c5fae9c3cd155bd48220a1
 ```
 
 华为应用市场使用正式签名的 App Pack：
 
-[artifacts/collection-genie-0.4.2.app](artifacts/collection-genie-0.4.2.app)
+[artifacts/collection-genie-0.4.3.app](artifacts/collection-genie-0.4.3.app)
 
 SHA-256：
 
 ```text
-c2222d8edd1ffd5e9b70163bc331f94544e36470709a6f24bf94cbac50daef69
+d739d21437574f4c06c77af6c729047e219a45dd19a558772cca94a49b7763bc
 ```
 
 该 HAP 使用正式发布证书和发布 Profile 签名，与早期调试签名版本不能直接覆盖安装。

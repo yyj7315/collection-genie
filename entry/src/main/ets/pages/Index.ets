@@ -1,5 +1,6 @@
 import { common } from '@kit.AbilityKit';
 import { promptAction, window } from '@kit.ArkUI';
+import { preferences } from '@kit.ArkData';
 import { pasteboard } from '@kit.BasicServicesKit';
 import { photoAccessHelper } from '@kit.MediaLibraryKit';
 import { detectBarcode, scanBarcode, scanCore } from '@kit.ScanKit';
@@ -12,6 +13,13 @@ import {
   UpdateManifest,
   UpdateService
 } from '../data/UpdateService';
+
+const PRIVACY_PREFERENCES_NAME: string = 'collection_genie_settings';
+const PRIVACY_CONSENT_VERSION_KEY: string = 'privacy_consent_version';
+const PRIVACY_CONSENT_AT_KEY: string = 'privacy_consent_at';
+const PRIVACY_POLICY_VERSION: number = 1;
+const PRIVACY_POLICY_URL: string =
+  'https://github.com/yyj7315/collection-genie/blob/main/PRIVACY.md';
 
 @Component
 struct MetricCardView {
@@ -62,7 +70,9 @@ struct Index {
   @State quickActionBusy: boolean = false;
   @State loading: boolean = true;
   @State bottomSafeInset: number = 40;
-  @State currentVersion: string = '0.4.2';
+  @State privacyPromptVisible: boolean = false;
+  @State privacyActionBusy: boolean = false;
+  @State currentVersion: string = '0.4.3';
   @State updateManifestUrl: string = '';
   @State updateBusy: boolean = false;
   @State updateAvailable: boolean = false;
@@ -91,16 +101,86 @@ struct Index {
     try {
       const context = getContext(this) as common.UIAbilityContext;
       await this.updateBottomSafeInset(context);
+      const consentAccepted = await this.hasAcceptedCurrentPrivacyPolicy(context);
+      if (!consentAccepted) {
+        this.loading = false;
+        this.privacyPromptVisible = true;
+        return;
+      }
+      await this.initializeAfterConsent(context);
+    } catch (error) {
+      this.loading = false;
+      this.shareNoticeSuccess = false;
+      this.shareNotice = `本地数据初始化失败：${String(error)}`;
+    }
+  }
+
+  private async initializeAfterConsent(context: common.UIAbilityContext): Promise<void> {
+    try {
       await this.repository.initialize(context);
       this.currentVersion = UpdateService.getCurrentVersionName();
       this.updateManifestUrl = await UpdateService.getManifestUrl(context);
       this.initialized = true;
+      this.privacyPromptVisible = false;
       await this.refreshItems();
       this.consumePendingShare();
     } catch (error) {
       this.loading = false;
       this.shareNoticeSuccess = false;
       this.shareNotice = `本地数据初始化失败：${String(error)}`;
+    }
+  }
+
+  private async hasAcceptedCurrentPrivacyPolicy(context: common.UIAbilityContext): Promise<boolean> {
+    try {
+      const store = await preferences.getPreferences(context, PRIVACY_PREFERENCES_NAME);
+      const value = await store.get(PRIVACY_CONSENT_VERSION_KEY, 0);
+      return typeof value === 'number' && value >= PRIVACY_POLICY_VERSION;
+    } catch (error) {
+      return false;
+    }
+  }
+
+  private async openPrivacyPolicy(): Promise<void> {
+    const context = getContext(this) as common.UIAbilityContext;
+    try {
+      await context.openLink(PRIVACY_POLICY_URL);
+    } catch (error) {
+      promptAction.showToast({ message: `无法打开隐私政策：${String(error)}` });
+    }
+  }
+
+  private async acceptPrivacyPolicy(): Promise<void> {
+    if (this.privacyActionBusy) {
+      return;
+    }
+    this.privacyActionBusy = true;
+    const context = getContext(this) as common.UIAbilityContext;
+    try {
+      const store = await preferences.getPreferences(context, PRIVACY_PREFERENCES_NAME);
+      await store.put(PRIVACY_CONSENT_VERSION_KEY, PRIVACY_POLICY_VERSION);
+      await store.put(PRIVACY_CONSENT_AT_KEY, Date.now());
+      await store.flush();
+      this.privacyPromptVisible = false;
+      await this.initializeAfterConsent(context);
+    } catch (error) {
+      this.shareNoticeSuccess = false;
+      this.shareNotice = `隐私政策确认保存失败：${String(error)}`;
+    } finally {
+      this.privacyActionBusy = false;
+    }
+  }
+
+  private async declinePrivacyPolicy(): Promise<void> {
+    if (this.privacyActionBusy) {
+      return;
+    }
+    this.privacyActionBusy = true;
+    const context = getContext(this) as common.UIAbilityContext;
+    try {
+      await context.terminateSelf();
+    } finally {
+      this.privacyActionBusy = false;
     }
   }
 
@@ -1502,6 +1582,111 @@ struct Index {
     .zIndex(10)
   }
 
+  @Builder
+  private PrivacyConsentOverlay() {
+    Stack({ alignContent: Alignment.Center }) {
+      Column()
+        .width('100%')
+        .height('100%')
+        .backgroundColor('#B31A2925')
+
+      Column({ space: 16 }) {
+        Row({ space: 12 }) {
+          Text('隐')
+            .width(42)
+            .height(42)
+            .textAlign(TextAlign.Center)
+            .fontSize(18)
+            .fontWeight(FontWeight.Bold)
+            .fontColor('#FFFFFF')
+            .backgroundColor('#0B8268')
+            .borderRadius(13)
+          Column({ space: 3 }) {
+            Text('隐私政策提示')
+              .fontSize(22)
+              .fontWeight(FontWeight.Bold)
+              .fontColor('#173B34')
+            Text('开始使用前请阅读并确认')
+              .fontSize(13)
+              .fontColor('#6E817B')
+          }
+          .alignItems(HorizontalAlign.Start)
+        }
+        .width('100%')
+
+        Text('收藏夹精灵是一款本地收藏整理工具。只有在您主动分享、点击“粘贴”或选择截图时，应用才会处理对应内容；不会登录第三方平台账号，也不会上传您的收藏、剪贴板或图片。')
+          .fontSize(14)
+          .lineHeight(22)
+          .fontColor('#405750')
+          .width('100%')
+
+        Column({ space: 8 }) {
+          Text('确认内容')
+            .fontSize(14)
+            .fontWeight(FontWeight.Medium)
+            .fontColor('#173B34')
+          Text('• 收藏链接、标题、归类、笔记和统计保存在本机')
+            .fontSize(13)
+            .lineHeight(20)
+            .fontColor('#5E726C')
+          Text('• 剪贴板仅在您点击系统粘贴按钮后临时读取')
+            .fontSize(13)
+            .lineHeight(20)
+            .fontColor('#5E726C')
+          Text('• 联网仅用于应用市场更新或您主动检查版本')
+            .fontSize(13)
+            .lineHeight(20)
+            .fontColor('#5E726C')
+        }
+        .width('100%')
+        .alignItems(HorizontalAlign.Start)
+        .padding(14)
+        .backgroundColor('#F1F7F4')
+        .borderRadius(14)
+
+        Text('《收藏夹精灵隐私政策》')
+          .fontSize(14)
+          .fontWeight(FontWeight.Medium)
+          .fontColor('#0B8268')
+          .width('100%')
+          .onClick(() => {
+            this.openPrivacyPolicy();
+          })
+
+        Row({ space: 10 }) {
+          Button(this.privacyActionBusy ? '处理中…' : '暂不使用')
+            .layoutWeight(1)
+            .height(46)
+            .backgroundColor('#E8EEEC')
+            .fontColor('#52655F')
+            .enabled(!this.privacyActionBusy)
+            .onClick(() => {
+              this.declinePrivacyPolicy();
+            })
+          Button(this.privacyActionBusy ? '处理中…' : '同意并继续')
+            .layoutWeight(1)
+            .height(46)
+            .backgroundColor('#0B8268')
+            .fontColor('#FFFFFF')
+            .enabled(!this.privacyActionBusy)
+            .onClick(() => {
+              this.acceptPrivacyPolicy();
+            })
+        }
+        .width('100%')
+      }
+      .width('88%')
+      .constraintSize({ maxWidth: 520 })
+      .padding({ left: 22, right: 22, top: 22, bottom: 20 })
+      .backgroundColor('#FFFFFF')
+      .borderRadius(22)
+      .shadow({ radius: 28, color: '#33000000', offsetY: 12 })
+    }
+    .width('100%')
+    .height('100%')
+    .zIndex(100)
+  }
+
   build() {
     Stack() {
       Column() {
@@ -1522,6 +1707,10 @@ struct Index {
 
       if (this.selectedItem !== null) {
         this.DetailOverlay(this.selectedItem)
+      }
+
+      if (this.privacyPromptVisible) {
+        this.PrivacyConsentOverlay()
       }
     }
     .width('100%')
